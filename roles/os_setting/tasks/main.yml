@@ -1,0 +1,15 @@
+- name: OS Basic Setting
+  block:
+    - name: 1. 계정&그룹  셋팅
+      import_tasks: user.yml
+
+    - name: 2. 기타 설정
+      import_tasks: extra.yml
+
+    - name: 3. 패키지 설치
+      import_tasks: package.yml
+
+    - name: 4. 서비스 설정
+      import_tasks: service.yml
+      
+      

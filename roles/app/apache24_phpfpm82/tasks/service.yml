@@ -1,0 +1,53 @@
+- name: 서비스 공통설정
+  block:
+    - name: 1. 초기 테스트 index.php  & 인증서 복사
+      copy:
+        src: "/home/firefox/{{ item.src_path }}"
+        dest: "/www/{{ item.dest_path }}"
+      loop:
+        - { src_path: 'ssl_firstmall/', dest_path: 'ssl_firstmall/' }
+        - { src_path: 'Admin/index.php', dest_path: 'Admin/index.php' }
+  
+    - name: 2. 아파치 스크립트 복사
+      copy:
+        src: "/home/firefox/rocky/rpm/httpd.service"
+        dest: "/usr/lib/systemd/system/"
+
+    - name: 3. phpoff.conf , php-fpm.conf, php-fpm.service 복사
+      copy: 
+        src: "/home/firefox/apache2.4/php-fpm/{{ item.src_path }}"
+        dest: "{{ item.dest_path }}"
+        owner: root
+        group: root
+      loop:
+        - { src_path: 'phpoff.conf', dest_path: '/etc/httpd/conf/' }
+        - { src_path: 'php-fpm.conf', dest_path: '/usr/local/php/etc/' }
+        - { src_path: 'php-fpm.service', dest_path: '/usr/lib/systemd/system/' }
+       
+    - name: 4. php 파일권한 수정
+      file: 
+        path: "/usr/local/php/bin/php"
+        mode: '0700'
+      
+    - name: 5. 서비스 기동설정
+      shell: | 
+        systemctl daemon-reload
+        systemctl disable httpd
+        /sbin/apachectl start 
+        systemctl enable php-fpm
+        systemctl start php-fpm 
+ 
+    - name: 
+      shell: | 
+        /sbin/apachectl -v
+      register: apache_ver
+    - name: 
+      shell: |
+        /usr/local/php/bin/php -v  
+      register: php_ver
+    - name: 6. 최종 설치된 아파치 & php-fpm 버전 확인 
+      debug:
+        msg:
+          - "아파치 버전: {{ apache_ver.stdout }}"
+          - "php-fpm 버전: {{ php_ver.stdout }}"
+        

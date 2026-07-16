@@ -1,0 +1,117 @@
+- name: 1. 아파치 패키지 설치
+  dnf: 
+    name: 
+      - httpd
+      - httpd-devel
+      - apr-util
+      - mod_security
+      - webalizer
+      - mod_ssl
+      - redhat-rpm-config
+    state: present
+    update_cache: yes
+
+
+- name: 2. 설정파일 복사
+  block: 
+    - name: 2-1. manage_hosting 디렉터리 생성
+      file:
+        path: /usr/local/manage_hosting
+        state: directory
+  
+    - name: 2-2. 필요한 파일 복사
+      copy:
+        src: "/home/firefox/rocky/{{ item.src_path }}" 
+        dest: "{{ item.dest_path }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode | default('0644') }}"
+      loop:
+        - { src_path: 'httpd.conf', dest_path: '/etc/httpd/conf/' }
+        - { src_path: 'ssl.conf', dest_path: '/etc/httpd/conf/' }
+        - { src_path: 'mime.types', dest_path: '/etc/httpd/conf/' }
+        - { src_path: 'get_count.pl', dest_path: '/usr/local/manage_hosting/' }
+        - { src_path: 'get_count2.pl', dest_path: '/usr/local/manage_hosting/' }
+        - { src_path: 'apachectl', dest_path: '/usr/sbin/', mode: '0755' }
+        - { src_path: 'webalizer.conf', dest_path: '/etc/' }
+
+
+- name: 3. 아파치 공통설정
+  block:
+    - name: 3-1. apachectl 복사
+      copy: 
+        src: /usr/sbin/apachectl
+        dest: /etc/init.d/httpd
+        remote_src: yes
+        mode: '0755'
+    
+    - name: 3-2. /web_log 디렉터리 생성
+      file:
+        path: /web_log
+        state: directory    
+
+    - name: 3-3. S99httpd 복사
+      file:
+        src: /etc/init.d/httpd
+        dest: /etc/rc3.d/S99httpd
+        state: link
+
+    - name: 3-4. 원본 아파치 로그 디렉터리 삭제
+      file: 
+        path: /etc/httpd/logs
+        state: absent
+ 
+    - name: 3-5. /etc/httpd/logs -> /web_log 심볼릭
+      file:
+        src: /web_log
+        dest: /etc/httpd/logs
+        state: link
+
+    - name: 3-6. /www/Admin 디렉터리 생성
+      file: 
+        path: /www/Admin
+        state: directory
+        mode: '0755'
+
+    - name: 3-7. /www/apachelogs -> /web_log 심볼릭
+      file: 
+        src: /web_log
+        dest: /www/apachelogs
+        state: link
+
+    - name: 3-8. /etc/httpd 디렉터리 권한변경
+      file:
+        state: directory
+        path: /etc/httpd
+        owner: root
+        group: root
+        mode: '0751'
+
+    - name: 3-9. /etc/httpd/conf 디렉터리 권한변경
+      file:
+        state: directory
+        path: /etc/httpd/conf
+        owner: root
+        group: gabia
+        mode: '0750'
+
+    - name: 3-10. /etc/httpd/conf/vhost 디렉터리 권한변경
+      file:
+        path: /etc/httpd/conf/vhost
+        state: directory
+        mode: '0755'
+
+    - name: 3-11. dummy.conf 파일 생성
+      file:
+        path: /etc/httpd/conf/vhost/dummy.conf
+        state: touch
+
+    - name: 3-12. bad_bot.conf 파일 복사
+      copy: 
+        src: "/home/firefox/apache2.4/bad_bot.conf"
+        dest: "/etc/httpd/conf/"
+        owner: root
+        group: root
+        mode: '0644'
+
+

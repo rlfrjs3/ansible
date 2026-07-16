@@ -1,0 +1,30 @@
+---
+- name: OS initial Setting
+  hosts: ec2
+  user: rocky
+  become: true
+  become_method: sudo
+  gather_facts: false
+
+
+
+  #러너VM의 앤서블 버전이 최소 파이썬 3.7이상을 원하는데 rocky는 3.6이 깔려있기 때문에 3.9 버전을 설치
+  pre_tasks:
+    - name: 파이썬 3.9버전 설치
+      raw: dnf install -y python39
+      changed_when: true
+
+    - name: 설치 이후에 파이썬 경로 지정
+      set_fact:
+        ansible_python_interpreter: /usr/bin/python3.9
+
+    - name: 설치 이후에 팩트 수집 
+      setup:
+
+
+### 하위 roles에서 COPY 모듈 src 경로 확인하면서 돌려야 함 ###
+#src 위치가 로컬이면-> /home/firefox, 러너VM 내부 기준이면 -> ../config 
+  roles:
+    - role: "../roles/os_setting"
+    - role: "../roles/app/apache24_phpfpm82"
+    - role: "../roles/app/mysql80"

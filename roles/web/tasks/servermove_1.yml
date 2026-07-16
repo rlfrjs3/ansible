@@ -1,0 +1,49 @@
+---
+#사이트 비활성화 & rsync & 무료SSL 이전 & 소유권 변경
+
+- name: Site blocking
+  shell: mv {{ conf_path.stdout }}/vhost/{{ domain_name }}.conf {{ conf_path.stdout }} && apachectl graceful
+  delegate_to: "{{ old_web_ip }}"
+
+
+- name: File rsync
+  shell: |
+    rsync -av --exclude=database.php --delete {{ old_web_ip }}::www2/{{ homedir_name.stdout }}/ /www/{{ homedir_name.stdout }}/ &&
+    rsync -av {{ old_web_ip }}::R/web_log/{{ homedir_name.stdout }}/ /web_log/{{ homedir_name.stdout }} &&
+    rsync -av {{ old_web_ip }}::R{{ conf_path.stdout }}{{ domain_name }}.conf {{ conf_path.stdout }}/vhost/{{ domain_name }}.conf 
+  delegate_to: "{{ new_web_ip }}"
+
+
+- name: freeSSL rsync
+  shell: |
+      rsync -av {{ old_web_ip }}::R/etc/letsencrypt/archive/{{ old_ssl_info.stdout_lines[1] }}/ /etc/letsencrypt/archive/{{ old_ssl_info.stdout_lines[1] }}
+      rsync -av {{ old_web_ip }}::R/etc/letsencrypt/live/{{ old_ssl_info.stdout_lines[1] }}/ /etc/letsencrypt/live/{{ old_ssl_info.stdout_lines[1] }}
+      rsync -av {{ old_web_ip }}::R/etc/letsencrypt/renewal/{{ old_ssl_info.stdout_lines[1] }}.conf /etc/letsencrypt/renewal/{{ old_ssl_info.stdout_lines[1] }}.conf
+      /bin/sed -i "/^account =/c\account = {{ new_ssl_info.stdout_lines[0] }}" /etc/letsencrypt/renewal/{{ old_ssl_info.stdout_lines[1] }}.conf
+  delegate_to: "{{ new_web_ip }}"
+  when:
+    - old_ssl_info.stdout_lines | length > 1
+    - old_ssl_info.stdout_lines[0] | int > 0
+
+- name: fressSSL No Exist
+  debug:
+    msg: "무료SSL 도메인이 확인되지 않아 SSL rsync 작업을 건너뜁니다!"
+  when: 
+    - old_ssl_info.stdout_lines[0] | int == 0
+
+
+- name: Chown
+  shell: | 
+    user=$(awk -F: -v hd="/www/{{ homedir_name.stdout }}" '$6 ~ "^"hd {print $1}' /etc/passwd)
+    if [ -z "$user" ]; then
+      echo "Error: 계정명이 확인되지 않음"
+      exit 1
+    fi
+    find /www/{{ homedir_name.stdout }} ! -user {{ account_name.stdout }} -exec chown {{ account_name.stdout }}.mallusers {} \;
+    find /www/{{ homedir_name.stdout }} \( -uid +999 -uid -60000 -o -gid +999 -gid -60000 \) -exec chown {{ account_name.stdout }}.mallusers {} \;
+    chown -R nobody.mallusers /www/{{ homedir_name.stdout }}/_compile
+    chown -R root.mallusers /web_log/{{ homedir_name.stdout }}
+  delegate_to: "{{ new_web_ip }}"
+
+
+

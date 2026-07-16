@@ -1,0 +1,18 @@
+- name: 아파치 2.4.37 + php-fpm 8.2.16 설치 
+  block:
+    - name: 1. 아파치 기본 설치
+      import_tasks: apache_base.yml
+
+    - name: 2. 아파치 모듈 설치
+      import_tasks: apache_module.yml
+
+    - name: 3. php-fpm  기본 설치
+      import_tasks: php_base.yml
+
+    - name: 4. php-fpm  확장모듈 설치
+      import_tasks: php_extension_module.yml
+
+    - name: 5. 서비스 구동 설정
+      import_tasks: service.yml
+
+    

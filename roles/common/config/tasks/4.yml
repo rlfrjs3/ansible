@@ -1,0 +1,64 @@
+- name: 필수패키지 설치
+  block:
+    - name: PowerTools 저장소 활성화
+      community.general.dnf_config_manager:
+        name: powertools
+        state: enabled 
+
+
+    - name: EPEL 저장소 설치
+      dnf: 
+        name: epel-release
+        state: present
+
+
+    - name: 기본 패키지 리스트 로드
+      include_vars:
+        file: ../vars/base_packages.yml
+    - name: 기본 패키지 설치
+      dnf:
+        name: "{{ packages }}"
+        state: present
+      ignore_errors: yes
+
+
+    - name: python 패키지 리스트 로드
+      include_vars:
+        file: ../vars/python_packages.yml
+    - name: python 패키지 설치
+      dnf:
+        name: "{{ packages }}"
+        state: present
+      ignore_errors: yes
+
+
+    - name: salt 관련 패키지 rsync
+      shell: "rsync -a {{ SETUP }}::set/config/salt/*.rpm /root/"
+
+  
+    - name: salt 패키지 설치
+      dnf:
+        name: 
+          - /root/python3-zmq-20.0.0-1.el8.x86_64.rpm
+          - /root/salt-3005.5-1.el8.noarch.rpm
+          - /root/salt-minion-3005.5-1.el8.noarch.rpm
+        state: present
+        disable_gpg_check: yes
+ 
+
+    - name: salt 패키지 파일 삭제
+      file:
+        path: "/root/{{ item }}"
+        state: absent
+      loop:
+        - python3-zmq-20.0.0-1.el8.x86_64.rpm
+        - salt-3005.5-1.el8.noarch.rpm
+        - salt-minion-3005.5-1.el8.noarch.rpm
+
+
+    - name: dnf 업데이트
+      dnf: 
+        name: "*"
+        state: latest
+
+

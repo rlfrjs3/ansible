@@ -1,0 +1,149 @@
+- name: MySQL 8.0.36 설치
+  block:
+    - name: 1. libaio 패키지 설치
+      dnf:
+        name: libaio
+        state: present
+
+    - name: 2. mysql 그룹 생성
+      group:
+        name: mysql
+        state: present
+
+    - name: 3. mysql 유저 생성
+      user:
+        name: mysql
+        group: mysql
+        shell: /bin/false
+        create_home: false
+        system: true
+        state: present
+
+    - name: 4. 설치파일 복사
+      copy: 
+        src: "/home/firefox/upgrade/mysql-8.0.36-linux-glibc2.28-x86_64.tar.xz"
+        dest: "/usr/local/src/"
+
+    - name: 5. 설치파일 압축해제
+      unarchive:
+        src: "/usr/local/src/mysql-8.0.36-linux-glibc2.28-x86_64.tar.xz"
+        dest: "/usr/local/src/"
+        remote_src: yes
+
+    - name: 6. mysql 설치
+      shell: |
+        mv /usr/local/src/mysql-8.0.36-linux-glibc2.28-x86_64/ /usr/local/mysql/
+        /usr/local/mysql/bin/mysqld --no-defaults --basedir=/usr/local/mysql/ --datadir=/usr/local/mysql/data --initialize > /root/mysqlpass 2>&1
+
+    - name: 
+      shell: |
+        /bin/grep generated /root/mysqlpass | awk '{print $13}'
+      register: mysql_pass
+    - name: 7. 초기 root 패스워드 추출
+      debug: 
+        msg: "{{ mysql_pass.stdout }}"
+
+    - name: 8. 디렉터리 권한 설정
+      file: 
+        path: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+        state: directory
+        recurse: yes
+      loop:
+        - { path: /usr/local/mysql, owner: root, group: mysql, mode: '0755' }
+        - { path: /usr/local/mysql/data, owner: mysql, group: mysql, mode: '0755' }
+
+    - name: 9. datadir 심볼릭
+      shell: | 
+        rsync -a /usr/local/mysql/data/ /data/
+        mv /usr/local/mysql/data /usr/local/mysql/data_org
+        ln -s /data /usr/local/mysql/data
+
+    - name: 10. my.cnf 복사
+      copy:
+        src: "/home/firefox/rocky/db_set/my_8.cnf"
+        dest: "/etc/my.cnf"
+        mode: '0600'
+        owner: root
+        group: root 
+
+    - name: 11. mysql 서비스 시작
+      shell: | 
+        support-files/mysql.server start 
+      args:
+        chdir: "/usr/local/mysql"
+
+
+    - name: 12. mysql 서비스 등록
+      copy:
+        src: "/usr/local/mysql/support-files/mysql.server"
+        dest: "/etc/init.d/mysqld"
+        remote_src: yes
+        mode: '0755'
+
+    - name: 13. 부팅 시 서비스 등록
+      file: 
+        src: /etc/init.d/mysqld
+        dest: /etc/rc3.d/S90mysqld
+        state: link
+        
+
+    - name: 14. mysql 서비스 시작 및 부팅 시 활성화
+      shell: |
+        /etc/init.d/mysqld start
+        chkconfig -add mysqld
+        chkconfig mysqld on 
+
+    - name: 15. 디렉토리 권한 설정
+      file:
+        path: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+        state: directory
+      loop:
+        - { path: /www/mysqlbackup, owner: root, group: root, mode: '0750' }
+        - { path: /data, owner: mysql, group: mysql, mode: '0755' }
+
+    - name: 16. 파일 권한 설정
+      file:
+        path: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: /usr/local/mysql/bin/mysqladmin, owner: root, group: gabia, mode: '0750' }
+        - { path: /usr/local/mysql, owner: root, group: mysql, mode: '0751' }
+    
+    - name: 17. 루트 패스워드 변경
+      shell: |
+        /usr/local/mysql/bin/mysqladmin -u root -p'{{ mysql_pass.stdout }}' password '{{ mysql_root_password }}'
+      when: mysql_pass.stdout | length > 0
+ 
+    - name: 18. 초기 실행쿼리 파일 복사
+      copy:
+        src: "/home/firefox/upgrade/query.sql"
+        dest: "/root/"
+
+    - name: 19. 초기 실행쿼리 파일 import
+      shell: | 
+        /usr/local/mysql/bin/mysql -u root -p'{{ mysql_root_password }}' < /root/query.sql
+
+    - name: 20. 임시파일 삭제
+      file: 
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /root/query.sql
+        - /root/.mysql_history
+        - /root/mysqlpass
+
+    - name: 
+      shell: | 
+        /usr/local/mysql/bin/mysql -u root -p'{{ mysql_root_password }}' -N -s -e "select version();"
+      register: mysql_ver
+    - name: 21. mysql 설치 버전 확인
+      debug:
+        msg: "{{ mysql_ver.stdout }}"

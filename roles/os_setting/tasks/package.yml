@@ -1,0 +1,32 @@
+- name: 3-1. dnf-plugins-core 패키지 설치 (config-manager 사용을 위해)
+  dnf: 
+    name: dnf-plugins-core
+    state: present
+
+
+- name: 3-2. Powertools 레포지토리 활성화
+  shell: |
+    dnf config-manager --set-enabled powertools
+  register: powertools_enable
+  changed_when: "'enabling' in powertools_enable.stdout or powertools_enable.rc == 0"
+
+
+- name: 3-3. EPEL 레포지토리 설치
+  dnf:
+    name: epel-release
+    state: present
+    update_cache: yes
+
+
+- name: 3-4. 기본 패키지 설치
+  dnf: 
+    name: "{{ base_packages }}"
+    state: present 
+ 
+
+- name: 3-5. EPEL관련  패키지 설치
+  dnf:
+    name: "{{ epel_packages }}"
+    state: present 
+    update_cache: yes
+   

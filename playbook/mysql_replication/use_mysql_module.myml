@@ -1,0 +1,150 @@
+---
+- name : 단독서버 리플리케이션     #mysql 모듈 사용 - 설정파일 가져오는 부분은 어쩔수 없이 shell 모듈 사용
+  hosts: test
+  user: zlxpf
+  become: true
+  become_method: sudo 
+  gather_facts: yes
+
+  
+  vars_file:
+    - vars/mysql_info.yml
+
+
+  tasks:
+    - name: mysql 버전확인 변수
+      shell: |
+        {{ mysql_path }} -uroot -p'{{ mysql_pwd }}' -N -s -e "SELECT VERSION();" | awk -F '.' '{print $1}'
+      register: mysql_version
+
+
+    - name: 설정파일(my.cnf와 리플리케이션 설정) rsync
+      block:       
+        - name: mysql 5 버전일때 
+          shell: | 
+            cp -a /etc/my.cnf /etc/my.cnf_{{ ansible_date_time.date }}
+            rsync -a 121.78.114.175::set/config/mysql_multi.cnf /etc/my.cnf
+            rsync -a 121.78.114.175::set/config/upgrade/multi1.sql /root/
+            rsync -a 121.78.114.175::set/config/upgrade/multi2.sql /root/
+          when: mysql_version.stdout == "5"
+
+        - name: mysql 8 버전일떄
+          shell: |
+            cp -a /etc/my.cnf /etc/my.cnf_{{ ansible_date_time.date }}
+            rsync -a 121.78.114.175::set/config/upgrade/my_multi.cnf /etc/my.cnf
+            rsync -a 121.78.114.175::set/config/upgrade/multi1.sql /root/
+            rsync -a 121.78.114.175::set/config/upgrade/multi2.sql /root/
+          when: mysql_version.stdout == "8"
+
+    
+    - name: 복제 계정(=repl) 생성 후 mysql 중지
+      shell: |
+        export PATH=$PATH:{{ mysql_path | dirname }}
+      
+        {{ mysql_path }} -uroot -p'{{ mysql_pwd }}' < /root/multi1.sql 
+        /etc/init.d/mysqld stop
+        sleep 10 
+        ps -ef | grep mysql | grep -v grep | wc -l 
+      register: mysql_state
+      ignore_errors: yes
+    
+    - name: mysql 프로세스 갯수만 추출
+      set_fact:
+        mysql_count: "{{ mysql_state.stdout_lines[-1] }}"
+ 
+
+    - name: 마스터 데이터를 슬레이브 datadir로 rsync
+      block: 
+        - name: 
+          shell: |
+            rsync -av --delete --exclude="mysql-bin.*" --exclude="auto.cnf" /data/ /local_backup/mysql_slave/   데이터 정합성을 맞추기 위해 2번 반복
+            rsync -av --delete --exclude="mysql-bin.*" --exclude="auto.cnf" /data/ /local_backup/mysql_slave/
+            chown -R mysql.mysql /local_backup/mysql_slave/
+          when: mysql_count == "0"
+        
+        - name:
+          fail:
+            msg: "mysql 서비스가 기동 중이라 데이터를 복사할 수 없습니다!  프로세스를 확인해주세요"
+          when: mysql_count != "0"
+
+
+    - name: mysql 스크립트 백업,변경 후 mysql 시작
+      block:
+        - name: mysql 5 버전일떄
+          shell: | 
+            export PATH=$PATH:{{ mysql_path | dirname }}
+
+            cp -a /etc/init.d/mysqld /etc/init.d/mysqld_{{ ansible_date_time.date }}
+            rsync -a 121.78.114.175::set/config/mysqld_multi /etc/init.d/mysqld
+            /etc/init.d/mysqld start 
+            sleep 5
+          when: mysql_version.stdout == "5"
+
+        - name: mysql 8 버전일때
+          shell: |
+            export PATH=$PATH:{{ mysql_path | dirname }}
+
+            cp -a /etc/init.d/mysqld /etc/init.d/mysqld_{{ ansible_date_time.date }}
+            rsync -a 121.78.114.175::set/config/upgrade/mysqld_multi /etc/init.d/mysqld
+            /etc/init.d/mysqld start
+            sleep 5
+          when: mysql_version.stdout == "8"
+
+
+    - name: 마스터DB 상태 조회
+      community.mysql.mysql_info:
+        login_user: "root"
+        login_password: "{{ mysql_pwd }}"
+        login_unix_socket: "/tmp/mysql.sock" 
+        filter: "master"  #마스터의 바이너리 파일과 포지션 
+      register: master_info
+ 
+
+    - name: 마스터 정보 변수 할당 
+      set_fact:
+        BIN: "{{ master_info.master.File }}"
+        POS: "{{ master_info.master.Position }}"
+
+
+    - name: 복제 구성
+      community.mysql.mysql_replication:
+        mode: changemaster
+        login_user: "root"
+        login_password: "{{ mysql_pwd }}"
+        login_unix_socket: "/tmp/mysql1.sock"
+        master_host: "127.0.0.1"
+        master_user: "repl"
+        master_password: "gabiacns_flvmf"
+        master_log_file: "{{ BIN }}"
+        master_log_pos: "{{ POS }}"
+
+
+    - name: 복제 시작
+      community.mysql.mysql_replication:
+        mode: startslave
+        login_user: "root"
+        login_password: "{{ mysql_pwd }}"
+        login_unix_socket: "/tmp/mysql1.sock"
+
+
+    - name: 복제 상태 조회
+      community.mysql.mysql_info:
+        login_user: "root"
+        login_password: "{{ mysql_pwd }}"
+        login_unix_socket: "/tmp/mysql1.sock"
+        filter: "slave"
+      register: slave_info
+
+
+    - name: 상태 출력
+      debug:
+        msg: 
+          - "IO_Running: {{ slave_info.slave.Slave_IO_Running }}"
+          - "SQL_Running: {{ slave_info.slave.Slave_SQL_Running }}"
+          - "Seconds_Behind: {{ slave_info.slave.Seconds_Behind_Master }}"
+ 
+      
+    
+        
+       
+

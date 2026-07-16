@@ -1,0 +1,8 @@
+- name: hosts 파일 설정
+  blockinfile:
+    path: /etc/hosts
+    state: present
+    block: | 
+      127.0.0.1       localhost localhost.localdomain
+      {{ IP }}     {{ hostname }} {{ hostname }}.firstmall.kr
+    marker: ""

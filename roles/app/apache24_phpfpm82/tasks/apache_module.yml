@@ -1,0 +1,110 @@
+- name: 1. mod_security 설치
+  copy: 
+    src: "/home/firefox/modsecurity/"
+    dest: "/etc/httpd/conf/modsecurity/"
+    owner: root
+    group: root
+
+
+- name: 2. mod_define
+  block:
+    - name: 2-1. mod_define 설치파일 복사
+      copy:
+        src: "/home/firefox/app/mod_define.tgz"
+        dest: "/usr/local/src/"
+
+    - name: 2-2. 설치파일 압축해제
+      unarchive:
+        src: "/usr/local/src/mod_define.tgz"
+        dest: "/usr/local/src/"
+        remote_src: yes
+
+    - name: 2-3. mod_define 설치
+      shell: | 
+        /usr/bin/apxs -ic mod_define.c
+      args:
+        chdir: "/usr/local/src/mod_define"
+
+
+
+- name: 3. mod_cband
+  block:
+    - name: 3-1. mod_cband 설치파일 복사
+      copy:
+        src: "/home/firefox/app/mod-cband-0.9.7.5.tgz"
+        dest: "/usr/local/src/"
+  
+    - name: 3-2. 설치파일 압축해제
+      unarchive:
+        src: "/usr/local/src/mod-cband-0.9.7.5.tgz"
+        dest: "/usr/local/src/"
+        remote_src: yes
+
+    - name: 3-3. mod_cband.c  라이브러리 복사
+      copy:
+        src: "/home/firefox/apache2.4/mod_cband.c"
+        dest: "/usr/local/src/mod-cband-0.9.7.5/src/"
+
+    - name: 3-4. mod_cband 설치
+      shell: |
+       /home/firefoxure --with-apxs=/usr/bin/apxs
+        make -j 4 && make install 
+      args:
+        chdir: "/usr/local/src/mod-cband-0.9.7.5"
+
+
+
+- name: 4. 기타 설정
+  block: 
+    - name: 4-1. CBAND 임시디렉터리 생성
+      file: 
+        path: /tmp/CBAND
+        state: directory
+        owner: nobody
+        group: nobody
+        recurse: yes
+
+    - name: 4-2. /etc/httpd/bin 디렉터리 생성
+      file: 
+        path: /etc/httpd/bin
+        state: directory
+
+    - name: 4-3. /etc/httpd/bin/envvars 복사
+      copy:
+        src: "/home/firefox/envvars"
+        dest: "/etc/httpd/bin/envvars"
+
+    - name: 4-4. httpd.conf 에서 mod_cband.so 삭제
+      shell: |
+        sed -i '/\/usr\/lib64\/httpd\/modules\/mod_cband.so/d' /etc/httpd/conf/httpd.conf
+    
+
+
+- name: 5. mod_geoip
+  block:
+    - name: 5-1. 기존 GeoIP.dat 파일 삭제
+      file:
+        path: /usr/share/GeoIP/GeoIP.dat
+        state: absent
+
+    - name: 5-2. GeoIP.dat 파일 복사
+      copy:
+        src: "/home/firefox/GeoIP/"
+        dest: "/usr/share/GeoIP/GeoIP.dat"
+
+    - name: 5-3. mod_geoip 설치파일 복사
+      copy:
+        src: "/home/firefox/apache2.4/geoip-api-mod_geoip2-1.2.10.tar.gz"
+        dest: "/usr/local/src/"
+
+    - name: 5-4. 설치파일 압축해제
+      unarchive:
+        src: "/usr/local/src/geoip-api-mod_geoip2-1.2.10.tar.gz"
+        dest: "/usr/local/src/"
+        remote_src: yes
+
+    - name: 5-5. mod_geoip 설치
+      shell: | 
+        /usr/bin/apxs -i -L/usr/lib64 -I/usr/include -lGeoIP -c mod_geoip.c
+      args:
+        chdir: "/usr/local/src/geoip-api-mod_geoip2-1.2.10"

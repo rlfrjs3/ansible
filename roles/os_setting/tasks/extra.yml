@@ -1,0 +1,29 @@
+- name: 2-1. 호스트네임 셋팅
+  hostname: 
+    name: "{{ ansible_default_ipv4.address }}-server"
+    use: systemd 
+
+
+- name: 2-2. SElinux 설정
+  shell: | 
+    /bin/sed -i 's/enforcing/disabled/g' /etc/selinux/config
+    setenforce 0
+
+
+- name: 2-3. Locale 설정
+  lineinfile:
+    path: /etc/locale.conf
+    regexp: 'LANG=en_US.UTF-8'
+    line: 'LANG=ko_KR.UTF-8'
+    state: present
+
+
+- name: 2-4. chattr 셋팅
+  shell: | 
+    touch /root/.bash_history
+    touch /home/firefox/.bash_history
+    chown zlxpf.zlxpf /home/firefox/.bash_history
+    chattr +a /root/.bash_history
+    chattr +a /home/firefox/.bash_history
+
+   

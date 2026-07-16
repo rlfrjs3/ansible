@@ -1,0 +1,128 @@
+### phpize -> 빌드 환경준비 / configure -> 컴파일 환경설정 및 Makefile 생성 / make -> 컴파일 / make install -> 컴파일된 정보로 실제 설치 ###
+
+- name: 1. libzip, zip 
+  block:
+    - name: 1-1. libzip 설치파일 복사
+      copy: 
+        src: "/home/firefox/upgrade/libzip-1.10.1.tar.gz"
+        dest: "/usr/local/src/"
+   
+    - name: 1-2. 설치파일 압축해제
+      unarchive:
+        src: "/usr/local/src/libzip-1.10.1.tar.gz"
+        dest: "/usr/local/src/"
+        remote_src: yes
+
+    - name: 1-3. libzip 설치 (zip 확장모듈을 설치하기 위한 OS단 라이브러리)
+      shell: | 
+        cmake3 -DCMAKE_INSTALL_PREFIX=/usr/local/libzip
+        make -j 4 && make install
+      args:
+        chdir: "/usr/local/src/libzip-1.10.1"
+    
+    - name: 1-4. zip 설치 
+      shell: |
+        export PKG_CONFIG_PATH=/usr/local/libzip/lib64/pkgconfig
+        /usr/local/php/bin/phpize
+        ./configure --with-php-config=/usr/local/php/bin/php-config
+        make -j 4 && make install
+      args: 
+        chdir: "/usr/local/src/php-8.2.16/ext/zip"
+
+
+
+- name: 2. mcrypt
+  block: 
+    - name: 2-1. mcrypt 설치파일 복사
+      copy: 
+        src: "/home/firefox/upgrade/mcrypt-1.0.6.tgz"
+        dest: "/usr/local/src/"
+
+    - name: 2-2. 설치파일 압축해제
+      unarchive:
+        src: "/usr/local/src/mcrypt-1.0.6.tgz"
+        dest: "/usr/local/src/"
+        remote_src: yes
+
+    - name: 2-3. mcrypt 설치
+      shell: | 
+        /usr/local/php/bin/phpize
+        ./configure --with-php-config=/usr/local/php/bin/php-config
+        make -j 4 && make install
+      args:
+        chdir: "/usr/local/src/mcrypt-1.0.6"
+
+
+
+- name: 3. php_screw_plus
+  block: 
+    - name: 3-1. php_screw_plus 설치파일 복사
+      copy:
+        src: "/home/firefox/upgrade/php_screw_plus_8.2.tar.gz"
+        dest: "/usr/local/src/"
+ 
+    - name: 3-2. 설치파일 압축해제
+      unarchive:
+        src: "/usr/local/src/php_screw_plus_8.2.tar.gz"
+        dest: "/usr/local/src/"
+        remote_src: yes
+
+    - name: 3-3. php_screw_plus 설치
+      shell: | 
+        /usr/local/php/bin/phpize
+        ./configure --with-php-config=/usr/local/php/bin/php-config
+        make -j 4 && make install
+      args:
+        chdir: "/usr/local/src/php_screw_plus"
+
+
+
+- name: 4. php_imagick
+  block: 
+    - name: 4-1. php_imagick 설치파일 복사
+      copy:
+        src: "/home/firefox/upgrade/imagick-3.7.0.tgz"
+        dest: "/usr/local/src/"
+     
+    - name: 4-2. 설치파일 압축해제
+      unarchive:
+        src: "/usr/local/src/imagick-3.7.0.tgz"
+        dest: "/usr/local/src/"
+        remote_src: yes
+ 
+    - name: 4-3. php_imagick 설치
+      shell: |
+        /usr/local/php/bin/phpize
+        ./configure --with-php-config=/usr/local/php/bin/php-config
+        make -j 4 && make install
+      args:
+        chdir: "/usr/local/src/imagick-3.7.0"
+
+
+
+- name: 5. php_runkit
+  block: 
+    - name: 5-1. php_runkit 설치파일 복사 
+      copy: 
+        src: "/home/firefox/upgrade/runkit7-4.0.0a6.tgz"
+        dest: "/usr/local/src/"
+ 
+    - name: 5-2. 설치파일 압축해제
+      unarchive:
+        src: "/usr/local/src/runkit7-4.0.0a6.tgz"
+        dest: "/usr/local/src/"
+        remote_src: yes
+
+    - name: 5-3. php_runkit 설치 
+      shell: |
+        /usr/local/php/bin/phpize
+        ./configure --with-php-config=/usr/local/php/bin/php-config
+        make -j 4 && make install
+      args:
+        chdir: "/usr/local/src/runkit7-4.0.0a6"
+
+
+
+- name: 6. 설치된 모듈들 복사 (php.in 에 설정된 확장모듈 설치 위치로 복사)
+  shell: |
+    cp -p /usr/local/php/lib/php/extensions/no-debug-non-zts-20220829/* /usr/local/php/lib/php/extensions/
