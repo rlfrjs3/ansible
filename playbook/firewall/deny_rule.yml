@@ -22,7 +22,7 @@
   tasks:
     - name: 입력ip 체크
       shell: |
-        grep "{{ ip }}" "{{ firewall_conf }}"
+        grep -F "{{ ip }}" "{{ firewall_conf }}"
       register: ip_check
       ignore_errors: yes
 

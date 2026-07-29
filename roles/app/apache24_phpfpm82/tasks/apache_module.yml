@@ -47,7 +47,7 @@
 
     - name: 3-4. mod_cband 설치
       shell: |
-       /home/firefoxure --with-apxs=/usr/bin/apxs
+        ./configure --with-apxs=/usr/bin/apxs
         make -j 4 && make install 
       args:
         chdir: "/usr/local/src/mod-cband-0.9.7.5"
