@@ -1,6 +1,6 @@
 ---
 - name: OS initial Setting
-  hosts: role_firstmallserver
+  hosts: role_webserver
   user: rocky
   become: true
   become_method: sudo

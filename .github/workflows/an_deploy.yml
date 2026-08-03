@@ -14,14 +14,19 @@ jobs:
     - name: "2. AWS API 조회를 위한 프로파일 키 값 전달"
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_GEON }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_GEON }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_STEPHANE }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_STEPHANE }}
         aws-region: ap-northeast-2
 
-    - name: "3. 플레이북 문법검사"
+    - name: "3. 플레이북 배포 (배스천 호스트를 프록시로 경유)"
       run: |
-        ansible-playbook -i inventory/aws_ec2.yml playbook/first_setting.yml --vault-password-file=decrypt.txt --syntax-check
+        BASTION_PRIVATE_IP=$(ansible-inventory -i inventory/aws_ec2.yml --graph | grep -A 1 role_bastionhost | tail -n 1 | tr -d ' |`-')
+        BASTION_IP=$(ansible-inventory -i inventory/aws_ec2.yml --host $BASTION_PRIVATE_IP | jq -r '.public_ip_address')
 
-    - name: "4. 플레이북 배포"
-      run: |
-        ansible-playbook -i inventory/aws_ec2.yml playbook/first_setting.yml --vault-password-file=decrypt.txt
+        echo "배스천 호스트 공인 ip: $BASTION_IP"
+
+        ansible-playbook -i inventory/aws_ec2.yml playbook/first_setting.yml --vault-password-file=decrypt.txt -e "ansible_ssh_common_args='-o ProxyJump=rocky@${BASTION_IP}
+
+
+
+
