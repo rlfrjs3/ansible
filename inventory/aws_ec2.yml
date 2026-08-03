@@ -1,0 +1,13 @@
+#AWS에 있는 EC2를 읽어서 Role이라는 태그 키가 있으면, 그 태그에 적힌 값을 가져와서 role_태그값 형태의 그룹을 자동으로 만드는 동적 인벤토리
+
+
+plugin: aws_ec2
+regions: 
+  - ap-northeast-2
+
+key_groups:
+  - key: tags.Role
+    prefix: role
+
+hostnames:
+  - ip-address
