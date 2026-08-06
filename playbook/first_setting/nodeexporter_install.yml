@@ -1,0 +1,12 @@
+---
+- name: Node Exporter Setting
+  hosts: role_bastionhost
+  user: rocky
+  become: true
+  become_method: sudo
+
+
+
+
+  roles:
+    - role: "../roles/monitoring/node_exporter"

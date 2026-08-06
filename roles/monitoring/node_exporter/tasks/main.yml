@@ -1,0 +1,102 @@
+- name: 1. Node Exporter 그룹 생성
+  ansible.builtin.group:
+    name: "{{ node_exporter_group }}"
+    system: true
+    state: present
+
+- name: 2. Node Exporter 계정 생성
+  ansible.builtin.user:
+    name: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+    state: present
+
+- name: 3. 현재 설치된 Node Exporter 버전 확인
+  ansible.builtin.command:
+    cmd: "{{ node_exporter_binary_path }} --version"
+  register: installed_node_exporter
+  changed_when: false
+  failed_when: false
+
+- name: 4. Node Exporter 설치 필요 여부 설정
+  ansible.builtin.set_fact:
+    node_exporter_install_required: >-
+      {{
+        installed_node_exporter.rc != 0
+        or node_exporter_version not in installed_node_exporter.stdout
+      }}
+
+- name: 5. Node Exporter 압축 파일 다운로드
+  ansible.builtin.get_url:
+    url: "{{ node_exporter_download_url }}"
+    dest: "{{ node_exporter_archive }}"
+    mode: "0644"
+  when: node_exporter_install_required
+
+- name: 6. Node Exporter 압축 해제
+  ansible.builtin.unarchive:
+    src: "{{ node_exporter_archive }}"
+    dest: /tmp
+    remote_src: true
+    creates: "{{ node_exporter_extract_dir }}/node_exporter"
+  when: node_exporter_install_required
+
+- name: 7. Node Exporter 바이너리 설치
+  ansible.builtin.copy:
+    src: "{{ node_exporter_extract_dir }}/node_exporter"
+    dest: "{{ node_exporter_binary_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  when: node_exporter_install_required
+  notify:
+    - restart node_exporter
+
+- name: 8. Node Exporter systemd Unit 배포
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - systemd daemon reload
+    - restart node_exporter
+
+- name: 9. Handler 즉시 실행
+  ansible.builtin.meta: flush_handlers
+
+- name: 10. Node Exporter 서비스 활성화 및 실행
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+
+- name: 11. Node Exporter 9100 포트 대기
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ node_exporter_port }}"
+    state: started
+    timeout: 30
+
+- name: 12. Node Exporter metrics 응답 확인
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ node_exporter_port }}/metrics"
+    method: GET
+    status_code: 200
+    return_content: false
+  register: node_exporter_metrics
+  retries: 5
+  delay: 2
+  until: node_exporter_metrics.status == 200
+
+- name: 13. 임시 설치 파일 삭제
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ node_exporter_archive }}"
+    - "{{ node_exporter_extract_dir }}"
+  when: node_exporter_install_required

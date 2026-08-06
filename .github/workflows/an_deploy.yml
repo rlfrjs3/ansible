@@ -25,4 +25,4 @@ jobs:
 
         echo "배스천 호스트 공인 ip: $BASTION_IP"
 
-        ansible-playbook -i inventory/aws_ec2.yml playbook/first_setting.yml --vault-password-file=decrypt.txt -e "ansible_ssh_common_args='-o ProxyJump=rocky@${BASTION_IP} -o StrictHostKeyChecking=no'"
+        ansible-playbook -i inventory/aws_ec2.yml playbook/first_setting/os_app_install.yml --vault-password-file=decrypt.txt -e "ansible_ssh_common_args='-o ProxyJump=rocky@${BASTION_IP} -o StrictHostKeyChecking=no'"
