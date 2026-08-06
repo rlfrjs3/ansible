@@ -1,12 +1,14 @@
 ---
 - name: Node Exporter Setting
-  hosts: role_bastionhost
+  #hosts: role_bastionhost
+  hosts: bastion
   user: rocky
   become: true
   become_method: sudo
 
-
+  vars:
+    - role_path: "/local_backup/ansible/roles"
 
 
   roles:
-    - role: "../roles/monitoring/node_exporter"
+    - role: "{{ role_path }}/monitoring/node_exporter"
