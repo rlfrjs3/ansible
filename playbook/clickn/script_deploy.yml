@@ -1,0 +1,44 @@
+---
+- name: script file deploy
+  hosts: clickn-web
+  user: zlxpf
+  become: true
+  become_method: sudo
+
+  tasks:
+
+  - name: 방화벽 스크립트 백업
+    copy:
+      src: /usr/local/manage_hosting/firewall/bin/firewall
+      dest: /usr/local/manage_hosting/firewall/bin/firewall_ori
+      remote_src: yes
+      force: false 
+
+  - name: 스크립트 배포
+    copy:
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+      mode: "0700"
+      owner: root
+      group: root
+    loop: 
+      - { src: "/home/gcadmin/gs2503063/firewall", dest: "/usr/local/manage_hosting/firewall/bin/" }
+      - { src: "/home/gcadmin/gs2503063/update_google_ip.sh", dest: "/usr/local/manage_hosting/" }
+      - { src: "/home/gcadmin/gs2503063/optimize_ip.py", dest: "/usr/local/manage_hosting/" } 
+
+
+  - name: cron  주석 추가
+    lineinfile:
+      path: "/etc/crontab"
+      line: |
+
+        "# google whitelist ip update"
+      state: present
+
+
+  - name: cron 내용 추가
+    lineinfile: 
+      path: "/etc/crontab"
+      line: "00 10 * * * root /usr/local/manage_hosting/update_google_ip.sh"
+      state: present
+      insertafter: EOF

@@ -1,0 +1,41 @@
+---
+- name: Run pass_pub logic directly in Ansible
+  hosts: colocation
+  user: zlxpf
+  become: yes
+  become_method: sudo
+  tasks:
+    - name: 공인IP 3,4번째 옥탯 저장
+      shell: curl -s https://gapi.firstmall.kr/ip/config | awk -F"." '{print $3"."$4}'
+      register: ip_output
+
+    - name: 위 3,4번째 옥택을 다시 한번 저장하기 위해 
+      set_fact:
+        ip_suffix: "{{ ip_output.stdout | trim }}"
+
+    - name: 계정별 패스워드 설정
+      set_fact:
+        user_list:
+          - name: root
+            password_template: "skdl{{ ip_suffix }}]["
+          - name: zlxpf
+            password_template: "wpal{{ ip_suffix }}[]"
+          - name: shopbuilder
+            password_template: "zmffhem{{ ip_suffix }}-=;"
+
+    - name: 계정이 존재하는지 체크하는 하위 롤 실행 (존재하면 패스워드 설정, 존재하지 않으면 에러메시지 출력)
+      include_role:
+        name: user_passwords
+      loop: "{{ user_list }}"
+      loop_control:
+        loop_var: user_item
+
+    - name: root 사용자의 패스워드 변경일과 만료일 정보 체크
+      shell: chage -l root | head -2크
+      register: password_expiry_check
+      ignore_errors: yes
+      failed_when: password_expiry_check.rc != 0 and password_expiry_check.stdout != ""
+
+    - name: 체크한 값 출력
+      debug:
+        msg: "Password expiry status: {{ 'not expired' if password_expiry_check.stdout == '' else password_expiry_check.stdout }}"

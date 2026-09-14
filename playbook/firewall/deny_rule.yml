@@ -1,6 +1,6 @@
 ---
 - name: 방화벽 인바운드 차단 플레이북
-  hosts: clickn-web
+  hosts: setting
   user: zlxpf
   become: yes
   become_method: sudo
@@ -22,7 +22,7 @@
   tasks:
     - name: 입력ip 체크
       shell: |
-        grep "{{ ip }}" "{{ firewall_conf }}"
+        grep -F "{{ ip }}" "{{ firewall_conf }}"
       register: ip_check
       ignore_errors: yes
 

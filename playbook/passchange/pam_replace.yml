@@ -1,0 +1,24 @@
+---
+- name: Update PAM cron configuration
+  hosts: failed
+  user: zlxpf
+  become: yes
+  gather_facts: no
+  
+  tasks:
+    - name: Change required to sufficient for pam_access.so
+      replace:
+        path: /etc/pam.d/crond
+        regexp: '^(account\s+)required(\s+pam_access\.so)$'
+        replace: '\1sufficient\2'
+        backup: yes
+      register: result
+      
+    - name: Verify the change
+      command: grep "account.*sufficient.*pam_access.so" /etc/pam.d/crond
+      register: verify
+      changed_when: false
+      
+    - name: Show result
+      debug:
+        msg: "{{ 'SUCCESS: Changed to sufficient' if result.changed and verify.rc == 0 else 'NO CHANGE or ERROR' }}"

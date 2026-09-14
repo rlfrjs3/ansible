@@ -1,0 +1,216 @@
+---
+- name: 퍼스트몰 임시도메인 SSL 적용 (없는 vhost만 찾아서 적용)
+  hosts: firstmall_multi_gwmart_gcloud
+  user: zlxpf
+  become: true
+  gather_facts: false
+
+  vars:
+    vhost_paths:
+      - "/etc/httpd/conf/vhost/*.firstmall.kr.conf"
+      - "/usr/local/apache/conf/vhost/*.firstmall.kr.conf"
+
+
+  tasks:
+    - name: 1. vhost 파일 찾기
+      ansible.builtin.shell: | 
+        for file in {{ vhost_paths | join(' ') }}
+        do
+          [ -f "$file" ] || continue
+          echo "$file"
+        done
+      register: firstmall_vhost_files
+      changed_when: false 
+
+
+    - name: 2. 작업 전 vhost 디렉터리 백업
+      ansible.builtin.shell: |
+        for dir in /etc/httpd/conf/vhost /usr/local/apache/conf/vhost
+        do
+          compgen -G "$dir/*.firstmall.kr.conf" > /dev/null || continue
+          
+          backup="${dir}_20260907"
+       
+          [ -e "$backup" ] && continue
+        
+          cp -a "$dir" "$backup"
+        done
+      args: 
+        executable: /bin/bash
+    
+
+    - name: 3. SSL이 적용되었는지 확인 후, 미적용 vhost에 SSL 추가
+      ansible.builtin.shell: | 
+        file="{{ item }}"
+        
+        domain=$(basename "$file" .conf)
+
+        if grep -A20 "<VirtualHost \*:443>" "$file" | grep -q "ServerName $domain"; then
+            echo "$domain | SSL_EXISTS"
+            exit 0
+        fi
+       
+        document_root=$(awk -v domain="$domain" '
+          /<VirtualHost \*:80>/ {
+              in_vhost=1
+              server_match=0
+              docroot=""
+          }
+
+          in_vhost && $1 == "ServerName" && $2 == domain {
+              server_match=1
+          }
+ 
+          in_vhost && $1 == "DocumentRoot" {
+              docroot=$2
+          }
+
+          /<\/VirtualHost>/ {
+              if (in_vhost && server_match) {
+                  print docroot
+                  exit
+              }
+              in_vhost=0
+          }
+        ' "$file")
+
+
+        custom_log=$(awk -v domain="$domain" '
+          /<VirtualHost \*:80>/ {
+              in_vhost=1
+              server_match=0
+              customlog=""
+          }
+
+          in_vhost && $1 == "ServerName" && $2 == domain {
+              server_match=1
+          }
+
+          in_vhost && $1 == "CustomLog" {
+              customlog=$2 " " $3
+          }
+
+          /<\/VirtualHost>/ {
+              if (in_vhost && server_match) {
+                  print customlog
+                  exit
+              }
+              in_vhost=0
+          }
+        ' "$file")
+
+       
+        if [ -z "$document_root" ]; then
+          echo "$domain | SSL_SKIP | DocumentRoot를 찾을 수 없음"
+          exit 0 
+        fi
+ 
+        if [ -z "$custom_log" ]; then
+          echo "$domain | SSL_SKIP | CustomLog를 찾을 수 없음"
+          exit 0 
+        fi
+     
+        
+        if [ ! -d "$document_root" ]; then
+          echo "$domain | SSL_SKIP | DocumentRoot 경로가 존재하지 않음: $document_root"
+          exit 0 
+        fi
+        
+        log_path=$(printf '%s\n' "$custom_log" | awk '{print $1}')
+        log_dir=$(dirname "$log_path")
+    
+        if [ ! -d "$log_dir" ]; then
+          echo "$domain | SSL_SKIP | CustomLog 디렉터리가 존재하지 않음: $log_dir"
+          exit 0 
+        fi
+
+        [ -n "$(tail -c 1 "$file")" ] && printf "\n" >> "$file"
+
+         
+        printf '%s\n' \
+        '<VirtualHost *:443>' \
+        "        ServerName ${domain}" \
+        "        DocumentRoot ${document_root}" \
+        "        CBandUser ${domain}" \
+        '        SSLEngine on' \
+        '        SSLCipherSuite "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384"' \
+        '        SSLCertificateFile /www/ssl_firstmall/wild.firstmall.kr/star_firstmall_kr_cert.pem' \
+        '        SSLCertificateKeyFile /www/ssl_firstmall/wild.firstmall.kr/star_firstmall_kr_key.key' \
+        '        SSLCertificateChainFile /www/ssl_firstmall/wild.firstmall.kr/Chain_RootCA_Bundle.crt' \
+        '        Options ExecCgi FollowSymlinks' \
+        "        CustomLog ${custom_log}" \
+        '</VirtualHost>' >> "$file"
+
+        echo "$domain | SSL_ADDED"
+      args:
+        executable: /bin/bash
+      loop: "{{ firstmall_vhost_files.stdout_lines }}"
+      register: ssl_result
+      changed_when: "'SSL_ADDED' in ssl_result.stdout"
+
+
+    - name: 4. apachectl 경로 찾기
+      ansible.builtin.shell: | 
+        pid=$(ss -lntp 2>/dev/null \
+          | awk '$4 ~ /:80$|:443$/ && /httpd/ {
+              if (match($0, /pid=[0-9]+/)) {
+                  print substr($0, RSTART+4, RLENGTH-4)
+                  exit
+              }
+            }')
+
+        if [ -z "$pid" ]; then
+          echo "80/443 포트를 LISTEN 중인 httpd 프로세스를 찾을 수 없습니다." >&2
+          exit 1
+        fi
+
+        binary=$(readlink -f "/proc/$pid/exe")
+       
+        if [ -z "$binary" ] || [ ! -x "$binary" ]; then
+          echo "httpd 실행파일을 확인할 수 없습니다. PID: $pid" >&2
+          exit 1 
+        fi
+
+        bin_dir=$(dirname "$binary")
+
+        if [ -x "${bin_dir}/apachectl" ]; then
+          echo "${bin_dir}/apachectl"
+          exit 0 
+        fi
+
+        for path in /usr/sbin/apachectl /usr/bin/apachectl
+        do
+          if [ -x "$path" ]; then
+             echo "$path"
+             exit 0 
+          fi
+        done
+
+        echo "Apache binary: $binary" >&2
+        echo "apachectl 경로를 확인할 수 없습니다." >&2
+        exit 1  
+      args:
+        executable: /bin/bash
+      register: apachectl_path 
+      changed_when: false
+      when: ssl_result.changed
+    
+
+    - name: 5. apache 문법 검사
+      ansible.builtin.command: 
+        cmd: "{{ apachectl_path.stdout }} -t"
+      register: apache_configtest
+      changed_when: false
+      when: ssl_result.changed
+ 
+   
+    - name: 6. apache graceful 적용 
+      ansible.builtin.command: 
+        cmd: "{{ apachectl_path.stdout }} graceful"
+      when: 
+        - ssl_result.changed
+        - apache_configtest.rc == 0
+     
+                
+      
+        

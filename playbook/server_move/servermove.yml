@@ -8,8 +8,8 @@
 
 
   vars:
-    new_web_ip: 121.78.197.53
-    new_db_ip: 121.78.197.98
+    new_web_ip: 121.78.197.25
+    new_db_ip: 121.78.197.26
   
   vars_prompt:
     - name: old_web_ip

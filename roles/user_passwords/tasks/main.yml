@@ -1,0 +1,26 @@
+---
+- name: Verify if user exists
+  command: id {{ user_item.name }}
+  register: user_check
+  ignore_errors: yes
+
+- name: Set password for user if they exist
+  user:
+    name: "{{ user_item.name }}"
+    password: "{{ user_item.password_template | password_hash('sha512') }}"
+  when: user_check.rc == 0
+
+- name: Log when user does not exist
+  debug:
+    msg: "User '{{ user_item.name }}' does not exist, skipping password update"
+  when: user_check.rc != 0
+
+#- name: Check password expiry for root
+#  shell: LANG=C chage -l root | grep 'Password expires'
+#  register: password_expiry_check
+#  ignore_errors: yes
+#  failed_when: password_expiry_check.rc != 0 and password_expiry_check.stdout != ""
+
+#- name: Display password expiry info
+#  debug:
+#    msg: "Password expiry status: {{ 'not expired' if password_expiry_check.stdout == '' else password_expiry_check.stdout }}"

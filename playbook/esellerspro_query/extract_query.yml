@@ -1,0 +1,61 @@
+#7/1 테스트 해보긴 했는데 쿼리결과가 아무런 값이 안나왓음.... 혹시 요청 들어온다면 확인필요!
+
+---
+- name: Extract Query
+  hosts: hs-db1
+  user: zlxpf
+  become: yes
+  become_user: root
+  gather_facts: false
+  vars:
+    ansible_remote_tmp: /tmp
+    #ansible_python_interpreter: /usr/bin/python3
+    output_file: /home/firefox/dbquery_{{ inventory_hostname }}.csv
+    mysql_user: root
+    mysql_password: "tyvldahftkdjqqn!#%&"
+    mysql_bin: /usr/bin/mysql
+    mysql_extra_args: "--default-auth=mysql_native_password"
+    db_name: "zoomoney_pro"
+    csv_header: '"folder_name","title","html","advertise_html","manage_code","brand","model_name","manufacturer","minor_purchasable","use_combination","use_custom","use_supplement","source_area_content","supplier","supply_price","sale_price","customer_price","count","tax","sale_type","add_info","cert_info","attribute_info","image_info","category_info","summary_info","option_info","created_at","updated_at"'
+
+
+    my_query: |
+      SET @master_login_id = 'leadersy';     ### 이 부분만 고객ID로 바꿔서 실행
+      SET @master_id = (SELECT id FROM master_users WHERE master_login_id = @master_login_id COLLATE utf8mb4_general_ci AND deleted_at IS NULL);
+      SET @user_id = (SELECT id FROM users WHERE master_id = @master_id AND deleted_at IS NULL);
+      SELECT IFNULL(bpf.folder_name, '미분류') AS folder_name, bp.title, bp.html, bp.advertise_html,
+             bp.manage_code, bp.brand, bp.model_name, bp.manufacturer, bp.minor_purchasable,
+             bp.use_combination, bp.use_custom, bp.use_supplement, bp.source_area_content,
+             bp.supplier, bp.supply_price, bp.sale_price, bp.customer_price, bp.count,
+             bp.tax, bp.sale_type, bpei.add_info, bpei.cert_info, bpei.attribute_info,
+             bpei.image_info, bpei.category_info, bpei.summary_info, bpei.option_info,
+             bp.created_at, bp.updated_at
+      FROM basic_product bp
+      INNER JOIN basic_product_expand_info bpei ON bpei.basic_product_id = bp.id
+      LEFT JOIN basic_product_folder bpf ON bpf.user_id = bp.user_id AND bpf.id = bp.folder_id
+      WHERE bp.user_id = @user_id AND bp.deleted_at IS NULL;
+
+
+
+
+  
+  tasks:
+    - name: 1. 원격지 서버에 csv 파일이 이미 있다면 삭제 (초기화를 위해)
+      file:
+        path: "{{ output_file }}"
+        state: absent 
+
+
+    - name: 2. CSV 파일에 먼저 헤더 생성
+      copy:
+        content: "{{ csv_header }}\n"
+        dest: "{{ output_file }}"
+      
+
+
+    - name: 3. 쿼리 실행 및 CSV  형태로 변환하여 파일에 저장
+      shell: >
+        {{ mysql_bin }} {{ mysql_extra_args }} -u{{ mysql_user }} -p'{{ mysql_password }}' -D {{ db_name }} -N -B
+        -e "{{ my_query | replace('\n', ' ') }}" | sed 's/\t/,/g' >> {{ output_file }}
+      
+

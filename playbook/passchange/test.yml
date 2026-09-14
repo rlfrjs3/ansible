@@ -1,0 +1,14 @@
+---
+- name: Run pass_pub logic directly in Ansible
+  hosts: jdm-test 
+  user: zlxpf
+  become: yes
+  tasks:
+#   - name: Show all facts
+#     debug:
+#       var: ansible_facts
+
+   - name: Show specific fact
+     debug:
+       var: {{ ansible_mounts[1].mount }}
+

@@ -1,0 +1,94 @@
+---
+- name: 강원마트 물리서버 각 계정별 웹로그에서 패턴 추출
+  hosts: gwmart_physical
+  user: zlxpf
+  become: true
+  gather_facts: false
+
+  vars:
+    central_base_dir: "/local_backup/gwmart_physical"
+    remote_log_base_dir: "/web_log"
+    target_dir_pattern: "*_firstmall_kr"
+    target_log_pattern: "access_log*"
+    grep_pattern: "GET /order/complete?no="
+    remote_temp_dir: "/local_backup/gwmart_physical_log_extract"
+
+
+  tasks:
+# /web_log 하위의 *_firstmall_kr 디렉터리 검색
+    - name: 1.
+      ansible.builtin.find:
+        paths: "{{ remote_log_base_dir }}"
+        patterns: "{{ target_dir_pattern }}"
+        file_type: directory
+        recurse: false
+      register: firstmall_dirs
+
+# 각 *_firstmall_kr 디렉터리 안에서 access_log* 검 색  
+    - name: 2.
+      ansible.builtin.find:
+        paths: "{{ item.path }}"
+        patterns: "{{ target_log_pattern }}"
+        file_type: file
+        recurse: false
+      loop: "{{ firstmall_dirs.files }}"
+      register: access_log_results
+
+# 각 원격지 서버에 자기 IP 디렉터리 생성 -> ex) /local_backup/gwmart_physical_log_extract/1.1.1.1/
+    - name: 3.
+      ansible.builtin.file:
+        path: "{{ remote_temp_dir }}/{{ ansible_host | default(inventory_hostname) }}"
+        state: directory
+        mode: '0755'
+
+#임시 디렉터리 안에 *_firstmall_kr 각 디렉터리 생성
+    - name: 4.
+      ansible.builtin.file:
+        path: "{{ remote_temp_dir }}/{{ ansible_host | default(inventory_hostname) }}/{{ item.path | basename }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ firstmall_dirs.files }}"
+
+#access_log* 파일에서 패턴만 추출
+    - name: 5.
+      ansible.builtin.shell: >
+        grep -F "{{ grep_pattern }}"
+        "{{ item.1.path }}"
+        > "{{ remote_temp_dir }}/{{ ansible_host | default(inventory_hostname) }}/{{ item.0.item.path | basename }}/{{ item.1.path | basename }}"
+        || true
+      args:
+        executable: /bin/bash
+      loop: "{{ access_log_results.results | subelements('files', skip_missing=True) }}"
+      changed_when: false
+       
+# 앤서블 중앙 서버에 output 저장할 디렉터리 생성-> /local_backup/gwmart_physical/서버 IP
+    - name: 6 
+      ansible.builtin.file:
+        path: "{{ central_base_dir }}/{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+
+# 서버 IP 하위에 *_firstmall_kr 디렉터리 각 생성
+    - name: 7.
+      ansible.builtin.file:
+        path: "{{ central_base_dir }}/{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}/{{ item.path | basename }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ firstmall_dirs.files }}"
+      delegate_to: localhost
+
+# 추출된 로그를 앤서블 중앙 서버로 가져오기
+    - name: 8.
+      ansible.builtin.fetch:
+        src: "{{ remote_temp_dir }}/{{ ansible_host | default(inventory_hostname) }}/{{ item.0.item.path | basename }}/{{ item.1.path | basename }}"
+        dest: "{{ central_base_dir }}/{{ ansible_host | default(inventory_hostname) }}/{{ item.0.item.path | basename }}/{{ item.1.path | basename }}"
+        flat: true
+      loop: "{{ access_log_results.results | subelements('files', skip_missing=True) }}"
+
+# 원격 서버 임시파일 삭제
+    - name: 9.
+      ansible.builtin.file:
+        path: "{{ remote_temp_dir }}/{{ ansible_host | default(inventory_hostname) }}"
+        state: absent
+

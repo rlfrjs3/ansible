@@ -1,6 +1,7 @@
 ---
 - name: 다국어 웹서버 PHP-FPM 8.2 
-  hosts: test
+  hosts: firstmall-ec2
+  user: rocky
   become: yes
   become_method: sudo
   gather_facts: true
@@ -36,19 +37,19 @@
 #OS 기본셋팅(공통)
   roles:
     - role: "{{ role_path }}/common/config"
-    - role: "{{ role_path }}/common/service_install"
-    - role: "{{ role_path }}/common/service_onoff"
+#    - role: "{{ role_path }}/common/service_install"
+#    - role: "{{ role_path }}/common/service_onoff"
 
 #Apache 2.4 + PHP-FPM 8.2 + MySQL 8.0 설치 (작업 편리성을 위해 웹서버에도 MySQL 설치함)
-    - role: "{{ role_path }}/source/mysql/mysql80"
-    - role: "{{ role_path }}/source/apache24"
-    - role: "{{ role_path }}/source/apache24_modules"
-    - role: "{{ role_path }}/source/php_fpm82"
-    - role: "{{ role_path }}/source/php_extension_modules"
-    - role: "{{ role_path }}/source/php_extra"
+#    - role: "{{ role_path }}/source/mysql/mysql80"
+#    - role: "{{ role_path }}/source/apache24"
+#    - role: "{{ role_path }}/source/apache24_modules"
+#    - role: "{{ role_path }}/source/php_fpm82"
+#    - role: "{{ role_path }}/source/php_extension_modules"
+#    - role: "{{ role_path }}/source/php_extra"
 
 #기타 설정 (comdeny, /etc/profile, cron)
-    - role: "{{ role_path }}/common/default/web"
+#    - role: "{{ role_path }}/common/default/web"
 
 
 

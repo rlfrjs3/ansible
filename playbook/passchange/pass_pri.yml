@@ -1,0 +1,36 @@
+---
+- name: Run pass_pri logic directly in Ansible
+  hosts: zoomoney_gcloud,diad_gcloud,common_gcloud,geditor_gcloud
+  user: zlxpf
+  become: yes
+  tasks:
+    - name: Get eth0 IP address
+      set_fact:
+        eth0_ip: "{{ ansible_eth0.ipv4.address | default('') }}"
+      when: ansible_eth0 is defined and ansible_eth0.ipv4 is defined
+    
+    - name: Fallback to default IP if eth0 not available
+      set_fact:
+        eth0_ip: "{{ ansible_default_ipv4.address }}"
+      when: eth0_ip is not defined or eth0_ip == ""
+    
+    - name: Extract 3rd and 4th octet for ip_suffix
+      set_fact:
+        ip_suffix: "{{ eth0_ip.split('.')[2] }}.{{ eth0_ip.split('.')[3] }}"
+    
+    - name: Create user list with IP-based passwords
+      set_fact:
+        user_list:
+          - name: root
+            password_template: "skdl{{ ip_suffix }}]["
+          - name: zlxpf
+            password_template: "wpal{{ ip_suffix }}[]"
+          - name: shopbuilder
+            password_template: "zmffhem{{ ip_suffix }}-=;"
+    
+    - name: Verify and set password for users
+      include_role:
+        name: user_passwords
+      loop: "{{ user_list }}"
+      loop_control:
+        loop_var: user_item

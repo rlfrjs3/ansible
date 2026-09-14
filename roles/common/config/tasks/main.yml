@@ -1,7 +1,7 @@
 - name: OS 기본셋팅
   block:
-    - name: 계정 & 호스트네임 셋팅
-      import_tasks: 1.yml 
+#    - name: 계정 & 호스트네임 셋팅
+#      import_tasks: 1.yml 
 
     - name: hosts & resolv.conf 설정
       import_tasks: 2.yml

@@ -58,7 +58,7 @@
       ignore_errors: true
 
 
-    - name: 4. 원격지 서버에 csv 파일 생성
+    - name: 4. 원격지 서버에 csv 파일이 있으면 삭제
       ansible.builtin.file:
         path: "/home/firefox/dbquery_{{ inventory_hostname }}.csv"
         state: absent
